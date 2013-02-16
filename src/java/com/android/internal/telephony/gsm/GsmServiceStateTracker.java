@@ -78,6 +78,15 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.TimeZone;
 
+//////////////////////////////////////////////////////////
+import android.os.ServiceManager;
+import android.privacy.IPrivacySettingsManager;
+import android.privacy.PrivacyServiceException;
+import android.privacy.PrivacySettings;
+import android.privacy.PrivacySettingsManager;
+import java.util.Random;
+//////////////////////////////////////////////////////////
+
 /**
  * {@hide}
  */
@@ -90,6 +99,12 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
     GsmCellLocation newCellLoc;
     int mPreferredNetworkType;
 
+    
+    //--------------------------------------------------------------------------
+    private Context mContext;
+    private PrivacySettingsManager pSetMan;
+    //--------------------------------------------------------------------------
+    
     private int gprsState = ServiceState.STATE_OUT_OF_SERVICE;
     private int newGPRSState = ServiceState.STATE_OUT_OF_SERVICE;
     private int mMaxDataCalls = 1;
@@ -235,6 +250,13 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
         filter.addAction(Intent.ACTION_LOCALE_CHANGED);
         phone.getContext().registerReceiver(mIntentReceiver, filter);
 
+        
+        //--------------------------------------------------------------------------
+        this.mContext = phone.getContext();
+        if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+        //--------------------------------------------------------------------------
+        
+        
         // Gsm doesn't support OTASP so its not needed
         phone.notifyOtaspChanged(OTASP_NOT_NEEDED);
     }
@@ -342,8 +364,27 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                             Log.w(LOG_TAG, "error parsing location: " + ex);
                         }
                     }
-                    cellLoc.setLacAndCid(lac, cid);
+                    //---------------------------------------------------------------------------------------------------------------------
+                    try {
+                        if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+                        PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
+                        if (settings == null | settings.getLocationNetworkSetting() == PrivacySettings.REAL) {
+                            cellLoc.setLacAndCid(lac, cid);
+                        } else if (settings.getLocationNetworkSetting() == PrivacySettings.RANDOM) {
+                            Random values = new Random();
+                            cellLoc.setLacAndCid(values.nextInt(), values.nextInt());
+                        } else {
+                            //we will update with invalid cell location values
+                            cellLoc.setStateInvalid();
+                        }
+                    } catch (PrivacyServiceException e) {
+                        //we will update with invalid cell location values
+                        cellLoc.setStateInvalid();
+                        Log.e(LOG_TAG, "GsmServiceStateTracker:handleMessage: PrivacyServiceException occurred");
+                    }
                     phone.notifyLocationChanged();
+                    //---------------------------------------------------------------------------------------------------------------------
+                    
                 }
 
                 // Release any temporary cell lock, which could have been
@@ -643,8 +684,26 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                     }
 
                     // LAC and CID are -1 if not avail
-                    newCellLoc.setLacAndCid(lac, cid);
+                    //--------------------------------------------------------------------------------------------------------------------------------
+                    try {
+                        if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+                        PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
+                        if (settings == null || settings.getLocationNetworkSetting() == PrivacySettings.REAL) {
+                            newCellLoc.setLacAndCid(lac, cid);
+                        } else if (settings.getLocationNetworkSetting() == PrivacySettings.RANDOM) {
+                            Random values = new Random();
+                            newCellLoc.setLacAndCid(values.nextInt(), values.nextInt());
+                        } else {
+                            //we will update with invalid cell location values
+                            newCellLoc.setStateInvalid();
+                        }
+                    } catch (PrivacyServiceException e) {
+                        Log.e(LOG_TAG, "GsmServiceStateTracker:handleMessage:PrivacyServiceException occurred");
+                        newCellLoc.setStateInvalid();
+                    }
                     newCellLoc.setPsc(psc);
+                    //--------------------------------------------------------------------------------------------------------------------------------
+                    
                 break;
 
                 case EVENT_POLL_STATE_GPRS:
@@ -682,7 +741,21 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                     String opNames[] = (String[])ar.result;
 
                     if (opNames != null && opNames.length >= 3) {
-                         newSS.setOperatorName (opNames[0], opNames[1], opNames[2]);
+                    	//--------------------------------------------------------------------------------------------------------------------------------
+                        // **SM: notifications?
+                        try {
+                            if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+                            PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
+                            if (settings == null || settings.getNetworkInfoSetting() == PrivacySettings.REAL) {
+                                newSS.setOperatorName (opNames[0], opNames[1], opNames[2]);
+                            } else {
+                                newSS.setOperatorName ("", "", "");
+                            }
+                        } catch (PrivacyServiceException e) {
+                            Log.e(LOG_TAG, "GsmServiceStateTracker:handleMessage:PrivacyServiceException occurred");
+                            newSS.setOperatorName ("", "", "");
+                        }
+                        //--------------------------------------------------------------------------------------------------------------------------------
                     }
                 break;
 
@@ -1041,7 +1114,7 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
         }
 
         if (hasLocationChanged) {
-            phone.notifyLocationChanged();
+            phone.notifyLocationChanged(); //we can notify, because all sensitive data has changed before @author CollegeDev
         }
 
         if (! isGprsConsistent(gprsState, ss.getState())) {

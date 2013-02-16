@@ -74,6 +74,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.HashMap;
 import java.util.Random;
 
+// BEGIN PRIVACY ADDED
+import android.os.ServiceManager;
+import android.privacy.IPrivacySettingsManager;
+import android.privacy.PrivacyServiceException;
+import android.privacy.PrivacySettings;
+import android.privacy.PrivacySettingsManager;
+// END PRIVACY ADDED
+
 import static android.telephony.SmsManager.RESULT_ERROR_FDN_CHECK_FAILURE;
 import static android.telephony.SmsManager.RESULT_ERROR_GENERIC_FAILURE;
 import static android.telephony.SmsManager.RESULT_ERROR_LIMIT_EXCEEDED;
@@ -196,6 +204,114 @@ public abstract class SMSDispatcher extends Handler {
         sConcatenatedRef += 1;
         return sConcatenatedRef;
     }
+    
+    
+    //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+    
+    protected PrivacySettingsManager pSetMan;
+    
+    protected static final String P_TAG = "PrivacySMSDispatcher";
+    
+    protected static final int ACCESS_TYPE_SMS_MMS = 0;
+	protected static final int ACCESS_TYPE_ICC = 1;
+    
+    //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+    
+    //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+    /**
+     * Gives the actual package names which are trying to send sms
+     * {@hide}
+     * @return package name array or null
+     */
+	protected String[] getPackageName(){
+		 PackageManager pm = mContext.getPackageManager();
+	     String[] packageNames = pm.getPackagesForUid(Binder.getCallingUid());
+	     return packageNames;
+	}
+    
+    /**
+     * This method also includes notifications!
+     * @param packageNames 
+     * @param accessType use constants ACCESS_TYPE_SMS_MMS and ACCESS_TYPE_ICC
+     * @return true if package is allowed or exception was thrown or packages are empty, false if package is not allowed 
+     * {@hide}
+     */
+    protected boolean isAllowed(String[] packageNames, int accessType){
+    	try{
+    	    PrivacySettings settings = null;
+    		switch (accessType){
+    			case ACCESS_TYPE_SMS_MMS:
+    			    if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+    	        	if (packageNames == null) {
+                        Log.d(P_TAG, "SMSDispatcher:IsAllowed: packageNames is null");
+                        return true;
+    	        	}
+	        		for(int i=0; i < packageNames.length; i++){
+	            		settings = pSetMan.getSettings(packageNames[i]);
+	            		if(settings != null && settings.getSmsSendSetting() != PrivacySettings.REAL) {
+	            			notify(accessType, packageNames[i],PrivacySettings.EMPTY);
+	            			return false;
+	            		}
+	            		settings = null;
+	            	}
+	        		notify(accessType, packageNames[0],PrivacySettings.REAL);
+	        		return true;
+
+    			case ACCESS_TYPE_ICC:
+    			    if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+    	        	if (packageNames == null) {
+                        Log.d(P_TAG, "SMSDispatcher:IsAllowed: packageNames is null");
+                        return true;
+    	        	}
+	        		for(int i=0; i < packageNames.length; i++){
+	            		settings = pSetMan.getSettings(packageNames[i]);
+	            		if(settings != null && settings.getIccAccessSetting() != PrivacySettings.REAL){
+	            			notify(accessType, packageNames[i],PrivacySettings.EMPTY);
+	            			return false;
+	            		}
+	            		settings = null;
+	            	}
+	        		notify(accessType, packageNames[0],PrivacySettings.REAL);
+	        		return true;
+    	        default:
+    	        	notify(accessType, packageNames[0],PrivacySettings.REAL);
+    	        	return true;
+    		}
+    	} catch (PrivacyServiceException e) {
+    	    Log.e(P_TAG,"SMSDispatcher:IsAllowed: PrivacyServiceException occurred", e);
+    	    return false;
+    	} catch (Exception e) {
+    		Log.e(P_TAG,"Got exception while checking for sms or ICC acess permission", e);
+            return false;
+    	}
+    }
+    
+    /**
+     * {@hide}
+     * Helper method for method isAllowed() to show dataAccess toasts
+     * @param accessType use ACCESS_TYPE_SMS_MMS or ACCESS_TYPE_ICC
+     * @param packageName the package name
+     * @param accessMode PrivacySettings.REAL || PrivacySettings.CUSTOM || PrivacySettings.RANDOM || PrivacySettings.EMPTY
+     */
+    protected void notify(int accessType,String packageName, byte accessMode){
+        try {
+            switch(accessType){
+            case ACCESS_TYPE_SMS_MMS:
+                //Log.i("PrivacySmsManager","now send notify information outgoing sms");
+                pSetMan.notification(packageName, accessMode, PrivacySettings.DATA_SMS_SEND, null);
+                break;
+            case ACCESS_TYPE_ICC:
+                //Log.i("PrivacySmsManager","now send notify information ICC ACCESS");
+                pSetMan.notification(packageName, accessMode, PrivacySettings.DATA_ICC_ACCESS, null);
+                break;
+            }
+        } catch (Exception e) {
+            Log.d(P_TAG, "SMSDispatcher:notify: Exception when sending notification", e);
+        }
+    }
+    
+    //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+    
 
     /**
      * Create a new SMS dispatcher.
@@ -219,6 +335,13 @@ public abstract class SMSDispatcher extends Handler {
 
         createWakelock();
 
+        
+        //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+        
+        if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+        
+        //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+        
         mSmsCapable = mContext.getResources().getBoolean(
                 com.android.internal.R.bool.config_sms_capable);
         mSmsReceiveDisabled = !SystemProperties.getBoolean(
@@ -951,6 +1074,17 @@ public abstract class SMSDispatcher extends Handler {
             return;
         }
 
+        //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
+        if(!isAllowed(getPackageName(), ACCESS_TYPE_SMS_MMS)){
+        	if (sentIntent != null) {
+                try {
+                    sentIntent.send(RESULT_ERROR_GENERIC_FAILURE);
+                    Log.i(TAG,"fake also delivery state to radio off!");
+                } catch (CanceledException e) {}
+            }
+        	return;
+        }
+        //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
         HashMap<String, Object> map = new HashMap<String, Object>();
         map.put("smsc", smsc);
         map.put("pdu", pdu);
