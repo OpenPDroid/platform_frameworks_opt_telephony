@@ -83,6 +83,8 @@ import android.os.ServiceManager;
 import android.privacy.IPrivacySettingsManager;
 import android.privacy.PrivacySettings;
 import android.privacy.PrivacySettingsManager;
+import android.privacy.utilities.PrivacyConstants;
+
 import java.util.Random;
 //////////////////////////////////////////////////////////
 
@@ -363,20 +365,13 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                     }
                     //---------------------------------------------------------------------------------------------------------------------
                     PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName(), 0);
-                    if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.EMPTY){
-                    	//we will update with invalid cell location values
-                    	cellLoc.setStateInvalid();
-                    	phone.notifyLocationChanged();
-                    }
-                    else if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
-                    	Random values = new Random();
-                    	cellLoc.setLacAndCid(values.nextInt(), values.nextInt());
-                        phone.notifyLocationChanged();
-                    }
-                    else{
+                    if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() != PrivacySettings.REAL){
+                    	cellLoc.setLacAndCid(PrivacyConstants.GSM.getLocationAreaCode(), PrivacyConstants.GSM.getCellIdentity());
+                    	cellLoc.setPsc(PrivacyConstants.GSM.getPrimaryScramblingCode());
+                    } else {
                     	cellLoc.setLacAndCid(lac, cid);
-                        phone.notifyLocationChanged();
                     }
+                    phone.notifyLocationChanged();
                     //---------------------------------------------------------------------------------------------------------------------
                     
                 }
@@ -561,7 +556,7 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                     "of service, set plmn='" + plmn + "'");
         } else if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
             // In either home or roaming service
-            plmn = ss.getOperatorAlphaLong();
+            plmn = ss.getOperatorAlphaLong(); //we can allow this, because we catched it before
             showPlmn = !TextUtils.isEmpty(plmn) &&
                     ((rule & SIMRecords.SPN_RULE_SHOW_PLMN)
                             == SIMRecords.SPN_RULE_SHOW_PLMN);
@@ -574,10 +569,25 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
         // The value of spn/showSpn are same in different scenarios.
         //    EXTRA_SHOW_SPN = depending on IccRecords rule
         //    EXTRA_SPN = spn
-        String spn = (iccRecords != null) ? iccRecords.getServiceProviderName() : "";
+        //String spn = (iccRecords != null) ? iccRecords.getServiceProviderName() : "";
+       
+        String spn;
+    	PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
+        //--------------------------------------------------------------------------------------------------------------------------------
+        //this part is needed because we do not changed the IccRecord class
+        if(pSetMan != null && settings != null && settings.getNetworkInfoSetting() != PrivacySettings.REAL){
+        	spn = "Protected by PDroid2.0";
+        }
+        else{
+        	spn = (iccRecords != null) ? iccRecords.getServiceProviderName() : "";
+        }
+        //--------------------------------------------------------------------------------------------------------------------------------
+        
+        
         boolean showSpn = !TextUtils.isEmpty(spn)
                 && ((rule & SIMRecords.SPN_RULE_SHOW_SPN)
                         == SIMRecords.SPN_RULE_SHOW_SPN);
+        
 
         // Update SPN_STRINGS_UPDATED_ACTION IFF any value changes
         if (showPlmn != curShowPlmn
@@ -639,7 +649,7 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                         ar.exception);
             }
         } else try {
-        	PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName(), 0);
+        	PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
             switch (what) {
                 case EVENT_POLL_STATE_REGISTRATION:
                     states = (String[])ar.result;
@@ -678,19 +688,13 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                         mEmergencyOnly = false;
                     }
 
-                    // LAC and CID are -1 if not avail
+
                     //--------------------------------------------------------------------------------------------------------------------------------
-                    if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.EMPTY){
-                    	//we will update with invalid cell location values
-                    	newCellLoc.setStateInvalid();
-                        newCellLoc.setPsc(psc);
-                    }
-                    else if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
-                    	Random values = new Random();
-                    	newCellLoc.setLacAndCid(values.nextInt(), values.nextInt());
-                        newCellLoc.setPsc(psc);
-                    }
-                    else{
+                    if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() != PrivacySettings.REAL){
+                    	newCellLoc.setLacAndCid(PrivacyConstants.GSM.getLocationAreaCode(), PrivacyConstants.GSM.getCellIdentity());
+                    	newCellLoc.setPsc(PrivacyConstants.GSM.getPrimaryScramblingCode());
+                    	
+                    } else{
                     	newCellLoc.setLacAndCid(lac, cid);
                         newCellLoc.setPsc(psc);
                     }

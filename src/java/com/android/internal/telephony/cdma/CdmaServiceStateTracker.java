@@ -73,6 +73,8 @@ import android.os.ServiceManager;
 import android.privacy.IPrivacySettingsManager;
 import android.privacy.PrivacySettings;
 import android.privacy.PrivacySettingsManager;
+import android.privacy.utilities.PrivacyConstants;
+
 import java.util.Random;
 /////////////////////////////////////////////////////////
 
@@ -182,7 +184,14 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
 
     protected CdmaServiceStateTracker(CDMAPhone phone, CellInfo cellInfo) {
         super(phone, phone.mCM, cellInfo);
-
+        
+        
+        //-------------------------------------------------------------------------------------------------------------------------------------------------
+        this.mContext = phone.getContext();
+        pSetMan = new PrivacySettingsManager(mContext, IPrivacySettingsManager.Stub.asInterface(ServiceManager.getService("privacy")));
+        //-------------------------------------------------------------------------------------------------------------------------------------------------
+        
+        
         this.phone = phone;
         cr = phone.getContext().getContentResolver();
         cellLoc = new CdmaCellLocation();
@@ -218,10 +227,6 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
             mAutoTimeZoneObserver);
         setSignalStrengthDefaultValues();
 
-        //-------------------------------------------------------------------------------------------------------------------------------------------------
-        this.mContext = phone.getContext();
-        pSetMan = new PrivacySettingsManager(mContext, IPrivacySettingsManager.Stub.asInterface(ServiceManager.getService("privacy")));
-        //-------------------------------------------------------------------------------------------------------------------------------------------------
     }
 
     @Override
@@ -392,13 +397,12 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
                 }
                 //----------------------------------------------------------------------------------------------------------------------------------------------------------
                 PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName(), 0);
-                if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.EMPTY){
-                	//we will update with invalid cell location values
-                	cellLoc.setStateInvalid();
-                }
-                else if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
-                	Random values = new Random();
-                	cellLoc.setCellLocationData(values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt());
+                if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() != PrivacySettings.REAL){
+                	cellLoc.setCellLocationData(PrivacyConstants.CDMA.getCdmaBaseStationId(), 
+					                			PrivacyConstants.CDMA.getCdmaRandomLat(), 
+					                			PrivacyConstants.CDMA.getCdmaRandomLon(),
+					                			PrivacyConstants.CDMA.getCdmaSystemId(),
+					                			PrivacyConstants.CDMA.getCdmaNetworkId());
                 }
                 else{
                 	cellLoc.setCellLocationData(baseStationId, baseStationLatitude, baseStationLongitude, systemId, networkId);
@@ -687,18 +691,14 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
             mIsInPrl = (systemIsInPrl == 0) ? false : true;
             mDefaultRoamingIndicator = defaultRoamingIndicator;
 
-
-            // Values are -1 if not available.
             //-------------------------------------------------------------------------------------------------------------------------------------------------------------
-            if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.EMPTY){
-            	//we will update with invalid cell location and station values
-            	newCellLoc.setStateInvalid();
-            }
-            else if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
-            	Random values = new Random();
-            	newCellLoc.setCellLocationData(values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt());
-            }
-            else{
+            if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() != PrivacySettings.REAL){
+            	newCellLoc.setCellLocationData(	PrivacyConstants.CDMA.getCdmaBaseStationId(), 
+						            			PrivacyConstants.CDMA.getCdmaRandomLat(), 
+						            			PrivacyConstants.CDMA.getCdmaRandomLon(),
+						            			PrivacyConstants.CDMA.getCdmaSystemId(),
+						            			PrivacyConstants.CDMA.getCdmaNetworkId());
+            }else {
             	newCellLoc.setCellLocationData(baseStationId, baseStationLatitude, baseStationLongitude, systemId, networkId);
             }
             //-------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1055,7 +1055,7 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
                 PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName(), 0);
                 if(pSetMan != null && settings != null && settings.getNetworkInfoSetting() != PrivacySettings.REAL){
                 	if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
-                        eriText = "";
+                        eriText = "Protected by PDroid2.0";
                     } else {
                         // Note that ServiceState.STATE_OUT_OF_SERVICE is valid used for
                         // mRegistrationState 0,2,3 and 4

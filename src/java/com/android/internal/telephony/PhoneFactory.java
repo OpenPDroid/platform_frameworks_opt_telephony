@@ -29,17 +29,16 @@ import com.android.internal.telephony.sip.SipPhone;
 import com.android.internal.telephony.sip.SipPhoneFactory;
 import com.android.internal.telephony.uicc.UiccController;
 
+import java.lang.reflect.Constructor;
+
 //--------------------------------------------------------
 import android.privacy.surrogate.PrivacyCDMAPhone;
 import android.privacy.surrogate.PrivacyCDMALTEPhone;
 import android.privacy.surrogate.PrivacyGSMPhone;
 import android.privacy.surrogate.PrivacySipPhone;
-//--------------------------------------------------------
-
-//BEGIN PRIVACY ADDED
 import android.privacy.surrogate.PrivacyPhoneProxy;
-//END PRIVACY ADDED
-
+import android.privacy.utilities.PrivacyDebugger;
+//--------------------------------------------------------
 
 /**
  * {@hide}
@@ -154,32 +153,27 @@ public class PhoneFactory {
                 int phoneType = TelephonyManager.getPhoneType(networkMode);
                 if (phoneType == PhoneConstants.PHONE_TYPE_GSM) {
                     Log.i(LOG_TAG, "Creating GSMPhone");
-                    //BEGIN PRIVACY ADDED
-                    //sProxyPhone = new PhoneProxy(new GSMPhone(context,
-                    //        sCommandsInterface, sPhoneNotifier));
-                    sProxyPhone = new PrivacyPhoneProxy(new PrivacyGSMPhone(context,
-                            sCommandsInterface, sPhoneNotifier),context);
-                    //END PRIVACY ADDED
+//                    sProxyPhone = new PhoneProxy(new GSMPhone(context,
+//                            sCommandsInterface, sPhoneNotifier));
+                    sProxyPhone = new PrivacyPhoneProxy(new PrivacyGSMPhone(context, sCommandsInterface, sPhoneNotifier),context);
+                    PrivacyDebugger.i("PhoneFactory", "user is now using privacy GSM Phone");
                 } else if (phoneType == PhoneConstants.PHONE_TYPE_CDMA) {
                     switch (TelephonyManager.getLteOnCdmaModeStatic()) {
                         case PhoneConstants.LTE_ON_CDMA_TRUE:
                             Log.i(LOG_TAG, "Creating CDMALTEPhone");
-                            //BEGIN PRIVACY ADDED
-                            //sProxyPhone = new PhoneProxy(new CDMALTEPhone(context,
-                            //    sCommandsInterface, sPhoneNotifier));
-                            sProxyPhone = new PrivacyPhoneProxy(new PrivacyCDMALTEPhone(context,
-                                sCommandsInterface, sPhoneNotifier),context);
-                            //END PRIVACY ADDED
+//                            sProxyPhone = new PhoneProxy(new CDMALTEPhone(context,
+//                                sCommandsInterface, sPhoneNotifier));
+                            sProxyPhone = new PrivacyPhoneProxy(new PrivacyCDMALTEPhone(context, sCommandsInterface, sPhoneNotifier), context);
+                            PrivacyDebugger.i("PhoneFactory", "user is now using privacy CDMALTE Phone");
+                            
                             break;
                         case PhoneConstants.LTE_ON_CDMA_FALSE:
                         default:
                             Log.i(LOG_TAG, "Creating CDMAPhone");
-                            //BEGIN PRIVACY ADDED
-                            //sProxyPhone = new PhoneProxy(new CDMAPhone(context,
-                            //        sCommandsInterface, sPhoneNotifier));
-                            sProxyPhone = new PrivacyPhoneProxy(new PrivacyCDMAPhone(context,
-                                    sCommandsInterface, sPhoneNotifier),context);
-                            //END PRIVACY ADDED
+//                            sProxyPhone = new PhoneProxy(new CDMAPhone(context,
+//                                    sCommandsInterface, sPhoneNotifier));
+                            sProxyPhone = new PrivacyPhoneProxy(new PrivacyCDMAPhone(context, sCommandsInterface, sPhoneNotifier), context);
+                            PrivacyDebugger.i("PhoneFactory", "user is now using privacy CDMA Phone");
                             break;
                     }
                 }
@@ -206,19 +200,17 @@ public class PhoneFactory {
         synchronized(PhoneProxy.lockForRadioTechnologyChange) {
             switch (TelephonyManager.getLteOnCdmaModeStatic()) {
                 case PhoneConstants.LTE_ON_CDMA_TRUE: {
-                    //BEGIN PRIVACY ADDED
-                    //phone = new CDMALTEPhone(sContext, sCommandsInterface, sPhoneNotifier);
+//                    phone = new CDMALTEPhone(sContext, sCommandsInterface, sPhoneNotifier);
                     phone = new PrivacyCDMALTEPhone(sContext, sCommandsInterface, sPhoneNotifier);
-                    //END PRIVACY ADDED
+                    PrivacyDebugger.i("PhoneFactory", "getCdmaPhone - returning privacy CDMALTE phone");
                     break;
                 }
                 case PhoneConstants.LTE_ON_CDMA_FALSE:
                 case PhoneConstants.LTE_ON_CDMA_UNKNOWN:
                 default: {
-                    //BEGIN PRIVACY ADDED
-                    //phone = new CDMAPhone(sContext, sCommandsInterface, sPhoneNotifier);
+//                    phone = new CDMAPhone(sContext, sCommandsInterface, sPhoneNotifier);
                     phone = new PrivacyCDMAPhone(sContext, sCommandsInterface, sPhoneNotifier);
-                    //END PRIVACY ADDED
+                    PrivacyDebugger.i("PhoneFactory", "getCdmaPhone - returning privacy cdma phone");
                     break;
                 }
             }
@@ -229,6 +221,7 @@ public class PhoneFactory {
     public static Phone getGsmPhone() {
         synchronized(PhoneProxy.lockForRadioTechnologyChange) {
             Phone phone = new PrivacyGSMPhone(sContext, sCommandsInterface, sPhoneNotifier);
+            PrivacyDebugger.i("PhoneFactory", "getGsmPhone - returning privacy GSM phone");
             return phone;
         }
     }
@@ -239,6 +232,7 @@ public class PhoneFactory {
      * @return the {@code SipPhone} object or null if the SIP URI is not valid
      */
     public static SipPhone makeSipPhone(String sipUri) {
+    	PrivacyDebugger.i("PhoneFactory", "makeSipPhone() - returning privacy sip phone");
         return SipPhoneFactory.makePhone(sipUri, sContext, sPhoneNotifier);
     }
 }
