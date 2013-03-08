@@ -42,6 +42,7 @@ import java.util.Set;
 import android.os.ServiceManager;
 import android.privacy.IPrivacySettingsManager;
 import android.privacy.PrivacyServiceException;
+import android.privacy.IPrivacySettings;
 import android.privacy.PrivacySettings;
 import android.privacy.PrivacySettingsManager;
 /////////////////////////////////////////////////////////////
@@ -104,7 +105,7 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
      */
     protected boolean isAllowed(String[] packageNames, int accessType){
         try{
-            PrivacySettings settings = null;
+            IPrivacySettings settings = null;
             switch (accessType){
                 case ACCESS_TYPE_SMS_MMS:
                     if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
@@ -114,8 +115,8 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
                         return true;
                     }
                     for(int i=0; i < packageNames.length; i++){
-                        settings = pSetMan.getSettings(packageNames[i]);
-                        if(settings != null && settings.getSmsSendSetting() != PrivacySettings.REAL) {
+                        settings = pSetMan.getSettingsSafe(packageNames[i]);
+                        if(settings != null && PrivacySettings.getOutcome(settings.getSmsSendSetting()) != PrivacySettings.REAL) {
                             notify(accessType, packageNames[i], PrivacySettings.EMPTY);
                             return false;
                         }
@@ -132,8 +133,8 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
                         return true;
                     }
                     for(int i=0; i < packageNames.length; i++){
-                        settings = pSetMan.getSettings(packageNames[i]);
-                        if(settings != null && settings.getIccAccessSetting() != PrivacySettings.REAL){
+                        settings = pSetMan.getSettingsSafe(packageNames[i]);
+                        if(settings != null && PrivacySettings.getOutcome(settings.getIccAccessSetting()) != PrivacySettings.REAL){
                             notify(accessType, packageNames[i],PrivacySettings.EMPTY);
                             return false;
                         }
@@ -145,10 +146,6 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
                     notify(accessType, packageNames[0],PrivacySettings.REAL);
                     return true;
             }
-        } catch (PrivacyServiceException e) {
-            Log.e(P_TAG,"SMSDispatcher:IsAllowed: PrivacyServiceException occurred", e);
-            notify(accessType, null, PrivacySettings.EMPTY);
-            return false;
         } catch (Exception e) {
             Log.e(P_TAG,"Got exception while checking for sms or ICC acess permission", e);
             return false;

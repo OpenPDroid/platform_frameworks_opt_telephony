@@ -72,6 +72,7 @@ import java.util.TimeZone;
 import android.os.ServiceManager;
 import android.privacy.IPrivacySettingsManager;
 import android.privacy.PrivacyServiceException;
+import android.privacy.IPrivacySettings;
 import android.privacy.PrivacySettings;
 import android.privacy.PrivacySettingsManager;
 import java.util.Random;
@@ -393,25 +394,19 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
                 }
                 //----------------------------------------------------------------------------------------------------------------------------------------------------------
 
-                try {
                     if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-                    PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
-                    if (settings == null || settings.getLocationNetworkSetting() == PrivacySettings.REAL) {
+                {
+                    IPrivacySettings settings = pSetMan.getSettingsSafe(mContext.getPackageName());
+                    if (settings == null || PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.REAL) {
                         cellLoc.setCellLocationData(baseStationId, baseStationLatitude, baseStationLongitude, systemId, networkId);
-                    } else if (settings.getLocationNetworkSetting() == PrivacySettings.EMPTY) {
-                        //we will update with invalid cell location values
-                        cellLoc.setStateInvalid();                            
-                    } else if (settings.getLocationNetworkSetting() == PrivacySettings.RANDOM) {
+                    } else if (PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.RANDOM) {
                         Random values = new Random();
                         cellLoc.setCellLocationData(values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt());                            
                     } else {
                         cellLoc.setStateInvalid();
                     }
-                } catch (PrivacyServiceException e) {
-                    Log.e(LOG_TAG, "CdmaServiceStateTracker:handleMessage:PrivacyServiceException occurred", e);
-                    cellLoc.setStateInvalid();
-                }
                 phone.notifyLocationChanged();
+                }
                 //----------------------------------------------------------------------------------------------------------------------------------------------------------
             }
 
@@ -698,25 +693,22 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
 
             // Values are -1 if not available.
             //-------------------------------------------------------------------------------------------------------------------------------------------------------------
-            try {
                 if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-                PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
-                if (settings == null || settings.getLocationNetworkSetting() == PrivacySettings.REAL) {
+            {
+                IPrivacySettings settings = pSetMan.getSettingsSafe(mContext.getPackageName());
+                if (settings == null || PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.REAL) {
                     newCellLoc.setCellLocationData(baseStationId, baseStationLatitude, baseStationLongitude, systemId, networkId);
-                } else if (settings.getLocationNetworkSetting() == PrivacySettings.EMPTY) {
+                } else if (PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.EMPTY) {
                     //we will update with invalid cell location and station values
                     newCellLoc.setStateInvalid();
-                } else if (settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
+                } else if (PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.RANDOM){
                     Random values = new Random();
                     newCellLoc.setCellLocationData(values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt(), values.nextInt());
                 } else {
                     cellLoc.setStateInvalid();
                 }
-            } catch (PrivacyServiceException e) {
-                Log.e(LOG_TAG, "CdmaServiceStateTracker:handleMessage:PrivacyServiceException occurred");
-                cellLoc.setStateInvalid();
-            }
             phone.notifyLocationChanged();
+            }
             //-------------------------------------------------------------------------------------------------------------------------------------------------------------
 
             if (reasonForDenial == 0) {
@@ -749,29 +741,24 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
                     }
                 }
                 //-----------------------------------------------------------------------------------------------------------------------------------------------------
-                try {
                     if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
                     if (!isSubscriptionFromRuim) {
                         // In CDMA in case on NV, the ss.mOperatorAlphaLong is set later with the
                         // ERI text, so here it is ignored what is coming from the modem.
-                        PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
-                        if (settings == null || settings.getNetworkInfoSetting() == PrivacySettings.REAL) {
+                    IPrivacySettings settings = pSetMan.getSettingsSafe(mContext.getPackageName());
+                    if (settings == null || PrivacySettings.getOutcome(settings.getNetworkInfoSetting()) == PrivacySettings.REAL) {
                             newSS.setOperatorName(null, opNames[1], opNames[2]);
                         } else {
                             newSS.setOperatorName(null, "", "");
                         }
                     } else {
-                        PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
-                        if (settings == null || settings.getNetworkInfoSetting() == PrivacySettings.REAL) {
+                    IPrivacySettings settings = pSetMan.getSettingsSafe(mContext.getPackageName());
+                    if (settings == null || PrivacySettings.getOutcome(settings.getNetworkInfoSetting()) == PrivacySettings.REAL) {
                             newSS.setOperatorName(opNames[0], opNames[1], opNames[2]);
                         } else {
                             newSS.setOperatorName(null, "", "");
                         }
                     }
-                } catch (PrivacyServiceException e) {
-                    Log.e(LOG_TAG, "CdmaServiceStateTracker:handleMessage:PrivacyServiceException occurred");
-                    newSS.setOperatorName(null, "", "");
-                }
                 //-----------------------------------------------------------------------------------------------------------------------------------------------------
             } else {
                 if (DBG) log("EVENT_POLL_STATE_OPERATOR_CDMA: error parsing opNames");
@@ -1074,10 +1061,9 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
                 String eriText;
                 // Now the CDMAPhone sees the new ServiceState so it can get the new ERI text
                 //---------------------------------------------------------------------------------------------------------------------------------------------------------
-                try {
                     if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-                    PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName());
-                    if (settings == null || settings.getLocationNetworkSetting() == PrivacySettings.REAL) {
+                    IPrivacySettings settings = pSetMan.getSettingsSafe(mContext.getPackageName());
+                    if (settings == null || PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.REAL) {
                         //original code
                         if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
                             eriText = phone.getCdmaEriText();
@@ -1098,17 +1084,6 @@ public class CdmaServiceStateTracker extends ServiceStateTracker {
                                     com.android.internal.R.string.roamingTextSearching).toString();
                         }
                     }
-                } catch (PrivacyServiceException e) {
-                    Log.e(LOG_TAG, "CdmaServiceStateTracker:pollStateDone:PrivacyServiceException occurred", e);
-                    if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
-                        eriText = "";
-                    } else {
-                        // Note that ServiceState.STATE_OUT_OF_SERVICE is valid used for
-                        // mRegistrationState 0,2,3 and 4
-                        eriText = phone.getContext().getText(
-                                com.android.internal.R.string.roamingTextSearching).toString();
-                    }
-                }
                 ss.setOperatorAlphaLong(eriText);
                 //---------------------------------------------------------------------------------------------------------------------------------------------------------
             }

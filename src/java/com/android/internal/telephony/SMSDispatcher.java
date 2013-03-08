@@ -79,6 +79,7 @@ import android.os.ServiceManager;
 import android.privacy.IPrivacySettingsManager;
 import android.privacy.PrivacyServiceException;
 import android.privacy.PrivacySettings;
+import android.privacy.IPrivacySettings;
 import android.privacy.PrivacySettingsManager;
 // END PRIVACY ADDED
 
@@ -238,7 +239,7 @@ public abstract class SMSDispatcher extends Handler {
      */
     protected boolean isAllowed(String[] packageNames, int accessType){
     	try{
-    	    PrivacySettings settings = null;
+    	    IPrivacySettings settings = null;
     		switch (accessType){
     			case ACCESS_TYPE_SMS_MMS:
     			    if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
@@ -247,8 +248,8 @@ public abstract class SMSDispatcher extends Handler {
                         return true;
     	        	}
 	        		for(int i=0; i < packageNames.length; i++){
-	            		settings = pSetMan.getSettings(packageNames[i]);
-	            		if(settings != null && settings.getSmsSendSetting() != PrivacySettings.REAL) {
+	            		settings = pSetMan.getSettingsSafe(packageNames[i]);
+	            		if(settings != null && PrivacySettings.getOutcome(settings.getSmsSendSetting()) != PrivacySettings.REAL) {
 	            			notify(accessType, packageNames[i],PrivacySettings.EMPTY);
 	            			return false;
 	            		}
@@ -264,8 +265,8 @@ public abstract class SMSDispatcher extends Handler {
                         return true;
     	        	}
 	        		for(int i=0; i < packageNames.length; i++){
-	            		settings = pSetMan.getSettings(packageNames[i]);
-	            		if(settings != null && settings.getIccAccessSetting() != PrivacySettings.REAL){
+	            		settings = pSetMan.getSettingsSafe(packageNames[i]);
+	            		if(settings != null && PrivacySettings.getOutcome(settings.getIccAccessSetting()) != PrivacySettings.REAL){
 	            			notify(accessType, packageNames[i],PrivacySettings.EMPTY);
 	            			return false;
 	            		}
@@ -277,9 +278,6 @@ public abstract class SMSDispatcher extends Handler {
     	        	notify(accessType, packageNames[0],PrivacySettings.REAL);
     	        	return true;
     		}
-    	} catch (PrivacyServiceException e) {
-    	    Log.e(P_TAG,"SMSDispatcher:IsAllowed: PrivacyServiceException occurred", e);
-    	    return false;
     	} catch (Exception e) {
     		Log.e(P_TAG,"Got exception while checking for sms or ICC acess permission", e);
             return false;
