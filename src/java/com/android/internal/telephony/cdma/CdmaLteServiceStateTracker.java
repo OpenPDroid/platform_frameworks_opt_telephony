@@ -49,6 +49,19 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.List;
 
+/////////////////////////////////////////////////////////
+// BEGIN privacy-added
+import android.os.ServiceManager;
+import android.privacy.IPrivacySettingsManager;
+import android.privacy.PrivacyServiceException;
+import android.privacy.IPrivacySettings;
+import android.privacy.PrivacySettings;
+import android.privacy.PrivacySettingsManager;
+import java.util.Random;
+// END privacy-added
+/////////////////////////////////////////////////////////
+
+
 public class CdmaLteServiceStateTracker extends CdmaServiceStateTracker {
     private CDMALTEPhone mCdmaLtePhone;
     private final CellInfoLte mCellInfoLte;
@@ -204,6 +217,9 @@ public class CdmaLteServiceStateTracker extends CdmaServiceStateTracker {
                         log("handlePollStateResultMessage: mNewLteCellIdentity=" +
                                 mNewCellIdentityLte);
                     }
+                    
+                    // SM: Do we need to add privacy stuff here?
+                    
                 }
             }
 
@@ -412,24 +428,41 @@ public class CdmaLteServiceStateTracker extends CdmaServiceStateTracker {
         if (hasChanged) {
             if (phone.isEriFileLoaded()) {
                 String eriText;
-                // Now the CDMAPhone sees the new ServiceState so it can get the
-                // new ERI text
-                if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
-                    eriText = phone.getCdmaEriText();
-                } else if (ss.getState() == ServiceState.STATE_POWER_OFF) {
-                    eriText = (mIccRecords != null) ? mIccRecords.getServiceProviderName() : null;
-                    if (TextUtils.isEmpty(eriText)) {
-                        // Sets operator alpha property by retrieving from
-                        // build-time system property
-                        eriText = SystemProperties.get("ro.cdma.home.operator.alpha");
+                // BEGIN privacy-modified
+                if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
+                int uid = mContext.getApplicationInfo().uid;
+                IPrivacySettings settings = pSetMan.getSettingsSafe(uid);
+                if (PrivacySettings.getOutcome(settings.getLocationNetworkSetting()) == PrivacySettings.REAL) {
+
+                    // Now the CDMAPhone sees the new ServiceState so it can get the
+                    // new ERI text
+                    if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
+                        eriText = phone.getCdmaEriText();
+                    } else if (ss.getState() == ServiceState.STATE_POWER_OFF) {
+                        eriText = (mIccRecords != null) ? mIccRecords.getServiceProviderName() : null;
+                        if (TextUtils.isEmpty(eriText)) {
+                            // Sets operator alpha property by retrieving from
+                            // build-time system property
+                            eriText = SystemProperties.get("ro.cdma.home.operator.alpha");
+                        }
+                    } else {
+                        // Note that ServiceState.STATE_OUT_OF_SERVICE is valid used
+                        // for mRegistrationState 0,2,3 and 4
+                        eriText = phone.getContext()
+                                .getText(com.android.internal.R.string.roamingTextSearching).toString();
                     }
+                    ss.setOperatorAlphaLong(eriText);
                 } else {
-                    // Note that ServiceState.STATE_OUT_OF_SERVICE is valid used
-                    // for mRegistrationState 0,2,3 and 4
-                    eriText = phone.getContext()
-                            .getText(com.android.internal.R.string.roamingTextSearching).toString();
+                    if (ss.getState() == ServiceState.STATE_IN_SERVICE) {
+                        eriText = "";
+                    } else if (ss.getState() == ServiceState.STATE_POWER_OFF) {
+                        eriText = "";
+                    } else {
+                        eriText = phone.getContext().getText(
+                                com.android.internal.R.string.roamingTextSearching).toString();
+                    }
                 }
-                ss.setOperatorAlphaLong(eriText);
+                // END privacy-modified
             }
 
             if (mUiccApplcation != null && mUiccApplcation.getState() == AppState.APPSTATE_READY &&

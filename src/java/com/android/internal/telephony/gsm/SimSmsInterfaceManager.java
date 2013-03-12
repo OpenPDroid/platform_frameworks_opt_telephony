@@ -84,18 +84,7 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
     
     //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
     
-    //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-    /**
-     * Gives the actual package names which are trying to send sms
-     * {@hide}
-     * @return package name array or null
-     */
-	protected String[] getPackageName(){
-		 PackageManager pm = mContext.getPackageManager();
-	     String[] packageNames = pm.getPackagesForUid(Binder.getCallingUid());
-	     return packageNames;
-	}
-    
+    //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------   
     /**
      * This method also includes notifications!
      * @param packageNames 
@@ -103,47 +92,31 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
      * @return true if package is allowed or exception was thrown or packages are empty, false if package is not allowed 
      * {@hide}
      */
-    protected boolean isAllowed(String[] packageNames, int accessType){
+    protected boolean isAllowed(int accessType){
         try{
             IPrivacySettings settings = null;
             switch (accessType){
                 case ACCESS_TYPE_SMS_MMS:
                     if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-                    if (packageNames == null) {
-                        Log.d(P_TAG, "SMSDispatcher:IsAllowed: packageNames is null: ALLOW");
-                        notify(accessType, null, PrivacySettings.REAL);
-                        return true;
-                    }
-                    for(int i=0; i < packageNames.length; i++){
-                        settings = pSetMan.getSettingsSafe(packageNames[i]);
-                        if(settings != null && PrivacySettings.getOutcome(settings.getSmsSendSetting()) != PrivacySettings.REAL) {
-                            notify(accessType, packageNames[i], PrivacySettings.EMPTY);
+                        settings = pSetMan.getSettingsSafe(Binder.getCallingUid());
+                        pSetMan.notification(Binder.getCallingUid(), settings.getSmsSendSetting(), IPrivacySettings.DATA_SMS_SEND, null);
+                        if(PrivacySettings.getOutcome(settings.getSmsSendSetting()) == IPrivacySettings.REAL) {
+                            return true;
+                        } else {
                             return false;
-                        }
-                        settings = null;
-                    }
-                    notify(accessType, packageNames[0],PrivacySettings.REAL);
-                    return true;
+                        } 
 
                 case ACCESS_TYPE_ICC:
                     if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-                    if (packageNames == null) {
-                        Log.d(P_TAG, "SMSDispatcher:IsAllowed: packageNames is null: ALLOW");
-                        notify(accessType, null, PrivacySettings.REAL);
-                        return true;
-                    }
-                    for(int i=0; i < packageNames.length; i++){
-                        settings = pSetMan.getSettingsSafe(packageNames[i]);
-                        if(settings != null && PrivacySettings.getOutcome(settings.getIccAccessSetting()) != PrivacySettings.REAL){
-                            notify(accessType, packageNames[i],PrivacySettings.EMPTY);
+                        settings = pSetMan.getSettingsSafe(Binder.getCallingUid());
+                        pSetMan.notification(Binder.getCallingUid(), settings.getIccAccessSetting(), IPrivacySettings.DATA_ICC_ACCESS, null);
+                        if(PrivacySettings.getOutcome(settings.getIccAccessSetting()) == IPrivacySettings.REAL){
+                            return true;
+                        } else {
                             return false;
                         }
-                        settings = null;
-                    }
-                    notify(accessType, packageNames[0],PrivacySettings.REAL);
-                    return true;
+           
                 default:
-                    notify(accessType, packageNames[0],PrivacySettings.REAL);
                     return true;
             }
         } catch (Exception e) {
@@ -151,27 +124,7 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
             return false;
         }
     }
-    
-    /**
-     * {@hide}
-     * Helper method for method isAllowed() to show dataAccess toasts
-     * @param accessType use ACCESS_TYPE_SMS_MMS or ACCESS_TYPE_ICC
-     * @param packageName the package name
-     * @param accessMode PrivacySettings.REAL || PrivacySettings.CUSTOM || PrivacySettings.RANDOM || PrivacySettings.EMPTY
-     */
-    protected void notify(int accessType,String packageName, byte accessMode){
-    	switch(accessType){
-    		case ACCESS_TYPE_SMS_MMS:
-    			//Log.i("PrivacySmsManager","now send notify information outgoing sms");
-    			pSetMan.notification(packageName, 0, accessMode, PrivacySettings.DATA_SMS_SEND, null, null);
-    			break;
-    		case ACCESS_TYPE_ICC:
-    			//Log.i("PrivacySmsManager","now send notify information ICC ACCESS");
-    			pSetMan.notification(packageName, 0, accessMode, PrivacySettings.DATA_ICC_ACCESS, null, null);
-    			break;
-    	}
-    }
-    
+        
     //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
 
     Handler mHandler = new Handler() {
@@ -247,7 +200,7 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
                 " status=" + status + " ==> " +
                 "("+ Arrays.toString(pdu) + ")");
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-        if(!isAllowed(getPackageName(),ACCESS_TYPE_ICC)){
+        if(!isAllowed(ACCESS_TYPE_ICC)){
         	return false;
         }
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
@@ -290,7 +243,7 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
                 "), smsm=(" + Arrays.toString(smsc) +")");
         
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-        if(!isAllowed(getPackageName(),ACCESS_TYPE_ICC)){
+        if(!isAllowed(ACCESS_TYPE_ICC)){
         	return false;
         }
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
@@ -321,7 +274,7 @@ public class SimSmsInterfaceManager extends IccSmsInterfaceManager {
         if (DBG) log("getAllMessagesFromEF");
 
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-        if(!isAllowed(getPackageName(),ACCESS_TYPE_ICC)){
+        if(!isAllowed(ACCESS_TYPE_ICC)){
         	return new ArrayList<SmsRawData>();
         }
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------

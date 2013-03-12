@@ -107,14 +107,14 @@ public abstract class SMSDispatcher extends Handler {
 
     /** Query projection for checking for duplicate message segments. */
     private static final String[] PDU_PROJECTION = new String[] {
-            "pdu"
+        "pdu"
     };
 
     /** Query projection for combining concatenated message segments. */
     private static final String[] PDU_SEQUENCE_PORT_PROJECTION = new String[] {
-            "pdu",
-            "sequence",
-            "destination_port"
+        "pdu",
+        "sequence",
+        "destination_port"
     };
 
     private static final int PDU_COLUMN = 0;
@@ -205,31 +205,20 @@ public abstract class SMSDispatcher extends Handler {
         sConcatenatedRef += 1;
         return sConcatenatedRef;
     }
-    
-    
+
+
     //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-    
-    protected PrivacySettingsManager pSetMan;
-    
+
+    protected PrivacySettingsManager mPrvSvc;
+
     protected static final String P_TAG = "PrivacySMSDispatcher";
-    
+
     protected static final int ACCESS_TYPE_SMS_MMS = 0;
-	protected static final int ACCESS_TYPE_ICC = 1;
-    
+    protected static final int ACCESS_TYPE_ICC = 1;
+
     //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-    
+
     //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-    /**
-     * Gives the actual package names which are trying to send sms
-     * {@hide}
-     * @return package name array or null
-     */
-	protected String[] getPackageName(){
-		 PackageManager pm = mContext.getPackageManager();
-	     String[] packageNames = pm.getPackagesForUid(Binder.getCallingUid());
-	     return packageNames;
-	}
-    
     /**
      * This method also includes notifications!
      * @param packageNames 
@@ -237,79 +226,38 @@ public abstract class SMSDispatcher extends Handler {
      * @return true if package is allowed or exception was thrown or packages are empty, false if package is not allowed 
      * {@hide}
      */
-    protected boolean isAllowed(String[] packageNames, int accessType){
-    	try{
-    	    IPrivacySettings settings = null;
-    		switch (accessType){
-    			case ACCESS_TYPE_SMS_MMS:
-    			    if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-    	        	if (packageNames == null) {
-                        Log.d(P_TAG, "SMSDispatcher:IsAllowed: packageNames is null");
-                        return true;
-    	        	}
-	        		for(int i=0; i < packageNames.length; i++){
-	            		settings = pSetMan.getSettingsSafe(packageNames[i]);
-	            		if(settings != null && PrivacySettings.getOutcome(settings.getSmsSendSetting()) != PrivacySettings.REAL) {
-	            			notify(accessType, packageNames[i],PrivacySettings.EMPTY);
-	            			return false;
-	            		}
-	            		settings = null;
-	            	}
-	        		notify(accessType, packageNames[0],PrivacySettings.REAL);
-	        		return true;
-
-    			case ACCESS_TYPE_ICC:
-    			    if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-    	        	if (packageNames == null) {
-                        Log.d(P_TAG, "SMSDispatcher:IsAllowed: packageNames is null");
-                        return true;
-    	        	}
-	        		for(int i=0; i < packageNames.length; i++){
-	            		settings = pSetMan.getSettingsSafe(packageNames[i]);
-	            		if(settings != null && PrivacySettings.getOutcome(settings.getIccAccessSetting()) != PrivacySettings.REAL){
-	            			notify(accessType, packageNames[i],PrivacySettings.EMPTY);
-	            			return false;
-	            		}
-	            		settings = null;
-	            	}
-	        		notify(accessType, packageNames[0],PrivacySettings.REAL);
-	        		return true;
-    	        default:
-    	        	notify(accessType, packageNames[0],PrivacySettings.REAL);
-    	        	return true;
-    		}
-    	} catch (Exception e) {
-    		Log.e(P_TAG,"Got exception while checking for sms or ICC acess permission", e);
-            return false;
-    	}
-    }
-    
-    /**
-     * {@hide}
-     * Helper method for method isAllowed() to show dataAccess toasts
-     * @param accessType use ACCESS_TYPE_SMS_MMS or ACCESS_TYPE_ICC
-     * @param packageName the package name
-     * @param accessMode PrivacySettings.REAL || PrivacySettings.CUSTOM || PrivacySettings.RANDOM || PrivacySettings.EMPTY
-     */
-    protected void notify(int accessType,String packageName, byte accessMode){
-        try {
-            switch(accessType){
+    protected boolean isAllowed(int accessType){
+        try{
+            IPrivacySettings settings = null;
+            switch (accessType){
             case ACCESS_TYPE_SMS_MMS:
-                //Log.i("PrivacySmsManager","now send notify information outgoing sms");
-                pSetMan.notification(packageName, accessMode, PrivacySettings.DATA_SMS_SEND, null);
-                break;
+                if (mPrvSvc == null) mPrvSvc = PrivacySettingsManager.getPrivacyService();
+                settings = mPrvSvc.getSettingsSafe(Binder.getCallingUid());
+                mPrvSvc.notification(Binder.getCallingUid(), settings.getSmsSendSetting(), IPrivacySettings.DATA_SMS_SEND, null);
+                if(PrivacySettings.getOutcome(settings.getSmsSendSetting()) == IPrivacySettings.REAL) {
+                    return true;
+                } else {
+                    return false;
+                }
             case ACCESS_TYPE_ICC:
-                //Log.i("PrivacySmsManager","now send notify information ICC ACCESS");
-                pSetMan.notification(packageName, accessMode, PrivacySettings.DATA_ICC_ACCESS, null);
-                break;
+                if (mPrvSvc == null) mPrvSvc = PrivacySettingsManager.getPrivacyService();
+                settings = mPrvSvc.getSettingsSafe(Binder.getCallingUid());
+                mPrvSvc.notification(Binder.getCallingUid(), settings.getIccAccessSetting(), IPrivacySettings.DATA_ICC_ACCESS, null);
+                if(PrivacySettings.getOutcome(settings.getIccAccessSetting()) == PrivacySettings.REAL){
+                    return true;
+                } else {
+                    return false;
+                }
+            default:
+                return true;
             }
         } catch (Exception e) {
-            Log.d(P_TAG, "SMSDispatcher:notify: Exception when sending notification", e);
+            Log.e(P_TAG,"Got exception while checking for sms or ICC acess permission", e);
+            return false;
         }
     }
-    
     //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-    
+
 
     /**
      * Create a new SMS dispatcher.
@@ -333,19 +281,19 @@ public abstract class SMSDispatcher extends Handler {
 
         createWakelock();
 
-        
+
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-        
-        if (pSetMan == null) pSetMan = PrivacySettingsManager.getPrivacyService();
-        
+
+        if (mPrvSvc == null) mPrvSvc = PrivacySettingsManager.getPrivacyService();
+
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-        
+
         mSmsCapable = mContext.getResources().getBoolean(
                 com.android.internal.R.bool.config_sms_capable);
         mSmsReceiveDisabled = !SystemProperties.getBoolean(
-                                TelephonyProperties.PROPERTY_SMS_RECEIVE, mSmsCapable);
+                TelephonyProperties.PROPERTY_SMS_RECEIVE, mSmsCapable);
         mSmsSendDisabled = !SystemProperties.getBoolean(
-                                TelephonyProperties.PROPERTY_SMS_SEND, mSmsCapable);
+                TelephonyProperties.PROPERTY_SMS_SEND, mSmsCapable);
         Log.d(TAG, "SMSDispatcher: ctor mSmsCapable=" + mSmsCapable + " format=" + getFormat()
                 + " mSmsReceiveDisabled=" + mSmsReceiveDisabled
                 + " mSmsSendDisabled=" + mSmsSendDisabled);
@@ -584,7 +532,7 @@ public abstract class SMSDispatcher extends Handler {
                 handleNotInService(ss, tracker.mSentIntent);
             } else if ((((CommandException)(ar.exception)).getCommandError()
                     == CommandException.Error.SMS_FAIL_RETRY) &&
-                   tracker.mRetryCount < MAX_SEND_RETRIES) {
+                    tracker.mRetryCount < MAX_SEND_RETRIES) {
                 // Retry after a delay if needed.
                 // TODO: According to TS 23.040, 9.2.3.6, we should resend
                 //       with the same TP-MR as the failed message, and
@@ -979,7 +927,7 @@ public abstract class SMSDispatcher extends Handler {
             TextEncodingDetails details = calculateLength(parts.get(i), false);
             if (encoding != details.codeUnitSize
                     && (encoding == SmsConstants.ENCODING_UNKNOWN
-                            || encoding == SmsConstants.ENCODING_7BIT)) {
+                    || encoding == SmsConstants.ENCODING_7BIT)) {
                 encoding = details.codeUnitSize;
             }
             encodingForParts[i] = details;
@@ -1073,14 +1021,14 @@ public abstract class SMSDispatcher extends Handler {
         }
 
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
-        if(!isAllowed(getPackageName(), ACCESS_TYPE_SMS_MMS)){
-        	if (sentIntent != null) {
+        if(!isAllowed(ACCESS_TYPE_SMS_MMS)){
+            if (sentIntent != null) {
                 try {
                     sentIntent.send(RESULT_ERROR_GENERIC_FAILURE);
                     Log.i(TAG,"fake also delivery state to radio off!");
                 } catch (CanceledException e) {}
             }
-        	return;
+            return;
         }
         //-------------------------------------------------------------++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------------------------------------------------
         HashMap<String, Object> map = new HashMap<String, Object>();
@@ -1195,25 +1143,25 @@ public abstract class SMSDispatcher extends Handler {
             }
 
             switch (premiumSmsPermission) {
-                case SmsUsageMonitor.PREMIUM_SMS_PERMISSION_ALWAYS_ALLOW:
-                    Log.d(TAG, "User approved this app to send to premium SMS");
-                    return true;
+            case SmsUsageMonitor.PREMIUM_SMS_PERMISSION_ALWAYS_ALLOW:
+                Log.d(TAG, "User approved this app to send to premium SMS");
+                return true;
 
-                case SmsUsageMonitor.PREMIUM_SMS_PERMISSION_NEVER_ALLOW:
-                    Log.w(TAG, "User denied this app from sending to premium SMS");
-                    sendMessage(obtainMessage(EVENT_STOP_SENDING, tracker));
-                    return false;   // reject this message
+            case SmsUsageMonitor.PREMIUM_SMS_PERMISSION_NEVER_ALLOW:
+                Log.w(TAG, "User denied this app from sending to premium SMS");
+                sendMessage(obtainMessage(EVENT_STOP_SENDING, tracker));
+                return false;   // reject this message
 
-                case SmsUsageMonitor.PREMIUM_SMS_PERMISSION_ASK_USER:
-                default:
-                    int event;
-                    if (smsCategory == SmsUsageMonitor.CATEGORY_POSSIBLE_PREMIUM_SHORT_CODE) {
-                        event = EVENT_CONFIRM_SEND_TO_POSSIBLE_PREMIUM_SHORT_CODE;
-                    } else {
-                        event = EVENT_CONFIRM_SEND_TO_PREMIUM_SHORT_CODE;
-                    }
-                    sendMessage(obtainMessage(event, tracker));
-                    return false;   // wait for user confirmation
+            case SmsUsageMonitor.PREMIUM_SMS_PERMISSION_ASK_USER:
+            default:
+                int event;
+                if (smsCategory == SmsUsageMonitor.CATEGORY_POSSIBLE_PREMIUM_SHORT_CODE) {
+                    event = EVENT_CONFIRM_SEND_TO_POSSIBLE_PREMIUM_SHORT_CODE;
+                } else {
+                    event = EVENT_CONFIRM_SEND_TO_PREMIUM_SHORT_CODE;
+                }
+                sendMessage(obtainMessage(event, tracker));
+                return false;   // wait for user confirmation
             }
         }
     }
@@ -1270,13 +1218,13 @@ public abstract class SMSDispatcher extends Handler {
         ConfirmDialogListener listener = new ConfirmDialogListener(tracker, null);
 
         AlertDialog d = new AlertDialog.Builder(mContext)
-                .setTitle(R.string.sms_control_title)
-                .setIcon(R.drawable.stat_sys_warning)
-                .setMessage(messageText)
-                .setPositiveButton(r.getString(R.string.sms_control_yes), listener)
-                .setNegativeButton(r.getString(R.string.sms_control_no), listener)
-                .setOnCancelListener(listener)
-                .create();
+        .setTitle(R.string.sms_control_title)
+        .setIcon(R.drawable.stat_sys_warning)
+        .setMessage(messageText)
+        .setPositiveButton(r.getString(R.string.sms_control_yes), listener)
+        .setNegativeButton(r.getString(R.string.sms_control_no), listener)
+        .setOnCancelListener(listener)
+        .create();
 
         d.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
         d.show();
@@ -1326,11 +1274,11 @@ public abstract class SMSDispatcher extends Handler {
         rememberChoice.setOnCheckedChangeListener(listener);
 
         AlertDialog d = new AlertDialog.Builder(mContext)
-                .setView(layout)
-                .setPositiveButton(r.getString(R.string.sms_short_code_confirm_allow), listener)
-                .setNegativeButton(r.getString(R.string.sms_short_code_confirm_deny), listener)
-                .setOnCancelListener(listener)
-                .create();
+        .setView(layout)
+        .setPositiveButton(r.getString(R.string.sms_short_code_confirm_allow), listener)
+        .setNegativeButton(r.getString(R.string.sms_short_code_confirm_deny), listener)
+        .setOnCancelListener(listener)
+        .create();
 
         d.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
         d.show();
@@ -1476,8 +1424,8 @@ public abstract class SMSDispatcher extends Handler {
      * Dialog listener for SMS confirmation dialog.
      */
     private final class ConfirmDialogListener
-            implements DialogInterface.OnClickListener, DialogInterface.OnCancelListener,
-            CompoundButton.OnCheckedChangeListener {
+    implements DialogInterface.OnClickListener, DialogInterface.OnCancelListener,
+    CompoundButton.OnCheckedChangeListener {
 
         private final SmsTracker mTracker;
         private Button mPositiveButton;
@@ -1508,7 +1456,7 @@ public abstract class SMSDispatcher extends Handler {
                 Log.d(TAG, "CONFIRM sending SMS");
                 // XXX this is lossy- apps can have more than one signature
                 EventLog.writeEvent(EventLogTags.SMS_SENT_BY_USER,
-                                    mTracker.mAppInfo.signatures[0].toCharsString());
+                        mTracker.mAppInfo.signatures[0].toCharsString());
                 sendMessage(obtainMessage(EVENT_SEND_CONFIRMED_SMS, mTracker));
                 if (mRememberChoice) {
                     newSmsPermission = SmsUsageMonitor.PREMIUM_SMS_PERMISSION_ALWAYS_ALLOW;
@@ -1517,7 +1465,7 @@ public abstract class SMSDispatcher extends Handler {
                 Log.d(TAG, "DENY sending SMS");
                 // XXX this is lossy- apps can have more than one signature
                 EventLog.writeEvent(EventLogTags.SMS_DENIED_BY_USER,
-                                    mTracker.mAppInfo.signatures[0].toCharsString());
+                        mTracker.mAppInfo.signatures[0].toCharsString());
                 sendMessage(obtainMessage(EVENT_STOP_SENDING, mTracker));
                 if (mRememberChoice) {
                     newSmsPermission = SmsUsageMonitor.PREMIUM_SMS_PERMISSION_NEVER_ALLOW;
@@ -1541,7 +1489,7 @@ public abstract class SMSDispatcher extends Handler {
                 mNegativeButton.setText(R.string.sms_short_code_confirm_never_allow);
                 if (mRememberUndoInstruction != null) {
                     mRememberUndoInstruction.
-                            setText(R.string.sms_short_code_remember_undo_instruction);
+                    setText(R.string.sms_short_code_remember_undo_instruction);
                     mRememberUndoInstruction.setPadding(0,0,0,32);
                 }
             } else {
