@@ -71,6 +71,14 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.TimeZone;
 
+//////////////////////////////////////////////////////////
+import android.os.ServiceManager;
+import android.privacy.IPrivacySettingsManager;
+import android.privacy.PrivacySettings;
+import android.privacy.PrivacySettingsManager;
+import java.util.Random;
+//////////////////////////////////////////////////////////
+
 /**
  * {@hide}
  */
@@ -82,6 +90,11 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
     GsmCellLocation mCellLoc;
     GsmCellLocation mNewCellLoc;
     int mPreferredNetworkType;
+
+    // BEGIN privacy additions
+    private Context mContext;
+    private PrivacySettingsManager pSetMan;
+    // END privacy
 
     private int mMaxDataCalls = 1;
     private int mNewMaxDataCalls = 1;
@@ -221,7 +234,13 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_LOCALE_CHANGED);
         phone.getContext().registerReceiver(mIntentReceiver, filter);
-
+        
+        //--------------------------------------------------------------------------
+        this.mContext = phone.getContext();
+        pSetMan = new PrivacySettingsManager(mContext, IPrivacySettingsManager.Stub.asInterface(ServiceManager.getService("privacy")));
+        //--------------------------------------------------------------------------
+        
+        
         // Gsm doesn't support OTASP so its not needed
         phone.notifyOtaspChanged(OTASP_NOT_NEEDED);
     }
@@ -331,8 +350,23 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                             Rlog.w(LOG_TAG, "error parsing location: " + ex);
                         }
                     }
-                    mCellLoc.setLacAndCid(lac, cid);
-                    mPhone.notifyLocationChanged();
+                    // BEGIN privacy additions
+                    PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName(), 0);
+                    if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.EMPTY){
+                    	//we will update with invalid cell location values
+                    	mCellLoc.setStateInvalid();
+                    	mPhone.notifyLocationChanged();
+                    }
+                    else if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
+                    	Random values = new Random();
+                    	mCellLoc.setLacAndCid(values.nextInt(), values.nextInt());
+                        mPhone.notifyLocationChanged();
+                    }
+                    else{
+                    	mCellLoc.setLacAndCid(lac, cid);
+                        mPhone.notifyLocationChanged();
+                    }
+                     // END privacy
                 }
 
                 // Release any temporary cell lock, which could have been
@@ -595,6 +629,7 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                         ar.exception);
             }
         } else try {
+        	PrivacySettings settings = pSetMan.getSettings(mContext.getPackageName(), 0);
             switch (what) {
                 case EVENT_POLL_STATE_REGISTRATION: {
                     states = (String[])ar.result;
@@ -644,8 +679,22 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                     }
 
                     // LAC and CID are -1 if not avail
-                    mNewCellLoc.setLacAndCid(lac, cid);
-                    mNewCellLoc.setPsc(psc);
+                    // BEGIN privacy additions
+                    if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.EMPTY){
+                    	//we will update with invalid cell location values
+                    	mNewCellLoc.setStateInvalid();
+                        mNewCellLoc.setPsc(psc);
+                    }
+                    else if(pSetMan != null && settings != null && settings.getLocationNetworkSetting() == PrivacySettings.RANDOM){
+                    	Random values = new Random();
+                    	mNewCellLoc.setLacAndCid(values.nextInt(), values.nextInt());
+                        mNewCellLoc.setPsc(psc);
+                    }
+                    else{
+                    	mNewCellLoc.setLacAndCid(lac, cid);
+                        mNewCellLoc.setPsc(psc);
+                    }
+                    // END privacy
                     break;
                 }
 
@@ -691,7 +740,14 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
                     String opNames[] = (String[])ar.result;
 
                     if (opNames != null && opNames.length >= 3) {
-                         mNewSS.setOperatorName (opNames[0], opNames[1], opNames[2]);
+                        // BEGIN privacy additions
+                        if(pSetMan != null && settings != null && settings.getNetworkInfoSetting() != PrivacySettings.REAL){
+                        	mNewSS.setOperatorName ("", "", "");
+                        }
+                        else{
+                        	mNewSS.setOperatorName (opNames[0], opNames[1], opNames[2]);
+                        }
+                        // END privacy
                     }
                     break;
                 }
@@ -1056,7 +1112,7 @@ final class GsmServiceStateTracker extends ServiceStateTracker {
         }
 
         if (hasLocationChanged) {
-            mPhone.notifyLocationChanged();
+            mPhone.notifyLocationChanged(); //we can notify, because all sensitive data has changed before @author CollegeDev
         }
 
         if (! isGprsConsistent(mSS.getDataRegState(), mSS.getVoiceRegState())) {
